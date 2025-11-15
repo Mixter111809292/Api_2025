@@ -1,10 +1,9 @@
 import express from 'express';
 import cors from 'cors';
-import usuarioRoutes from './routes/usuarioRoutes.js';
-import animalRoutes from './routes/animalRoutes.js';
-import seguimientoRoutes from './routes/seguimientoRoutes.js';
-import comentarioRoutes from './routes/comentarioRoutes.js';
-import historialRoutes from './routes/historialRoutes.js';
+import usuariosRoutes from './routes/usuariosRoutes.js';
+import productosRoutes from './routes/productosRoutes.js';
+import pedidosRoutes from './routes/pedidosRoutes.js';
+import ventasRoutes from './routes/ventasRoutes.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
@@ -30,11 +29,10 @@ app.use(express.urlencoded({ extended: true })); // Se añade para poder recepta
 // app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 // Rutas
-app.use('/api/usuarios', usuarioRoutes);
-app.use('/api/animales', animalRoutes);
-app.use('/api/seguimientos', seguimientoRoutes);
-app.use('/api/comentarios', comentarioRoutes);
-app.use('/api/historial', historialRoutes);
+app.use('/api/usuarios', usuariosRoutes);
+app.use('/api/productos', productosRoutes);
+app.use('/api/pedidos', pedidosRoutes);
+app.use('/api/ventas', ventasRoutes);
 
 // Middleware para rutas no encontradas
 app.use((req, res, next) => {

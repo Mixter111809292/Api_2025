@@ -20,8 +20,8 @@ export const verifyToken = (req, res, next) => {
       return res.status(401).send({ message: 'Token no válido' });
     }
 
-    // Guardar el ID del usuario decodificado en la solicitud
-    req.user = { id: decoded.id };
+ // Guardar ID y rol
+  req.user = { id: decoded.id, rol: decoded.rol };
 
     // Para depuración opcional
     console.log('Usuario autenticado:', req.user);
