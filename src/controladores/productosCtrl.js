@@ -70,17 +70,16 @@ export const crearProducto = async (req, res) => {
 
     let imagenUrl = null;
 
-    // 1. Subir imágenes a Cloudinary si existen (igual que animales)
+    // SUBIR IMAGEN A CLOUDINARY
     if (req.files && req.files.length > 0) {
       console.log('Archivos recibidos para producto:', req.files);
-      
-      // Tomar solo la primera imagen como principal (puedes modificar para múltiples)
+
       const imagen = req.files[0];
-      
+
       const uploadResult = await new Promise((resolve, reject) => {
         const uploadStream = cloudinary.uploader.upload_stream(
           {
-            folder: 'productos_tienda', // Cambié el folder
+            folder: 'productos_tienda',
             resource_type: 'auto',
           },
           (error, result) => {
@@ -98,7 +97,13 @@ export const crearProducto = async (req, res) => {
       imagenUrl = uploadResult.secure_url;
     }
 
-    // 2. Insertar producto en la base de datos
+    // 🔥 CONVERSIÓN CORRECTA PARA MYSQL
+    const disponibleInt =
+      disponible === "1" || disponible === 1 || disponible === true || disponible === "true"
+        ? 1
+        : 0;
+
+    // INSERTAR EN MYSQL
     const [result] = await conmysql.execute(
       `INSERT INTO productos 
       (nombre, descripcion, precio, stock, unidad, categoria, disponible, imagen_url) 
@@ -110,15 +115,15 @@ export const crearProducto = async (req, res) => {
         parseInt(stock),
         unidad,
         categoria || null,
-        disponible !== undefined ? disponible : true,
+        disponibleInt,  // 👈 SOLUCIÓN REAL
         imagenUrl
       ]
     );
 
-    res.status(201).json({ 
-      message: 'Producto creado exitosamente', 
+    res.status(201).json({
+      message: 'Producto creado exitosamente',
       id: result.insertId,
-      imagen_url: imagenUrl 
+      imagen_url: imagenUrl
     });
 
   } catch (error) {
