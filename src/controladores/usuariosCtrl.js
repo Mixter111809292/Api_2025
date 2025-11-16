@@ -171,4 +171,46 @@ export const patchUsuario = async (req, res) => {
     console.error('Error en patchUsuario:', error);
     res.status(500).json({ message: 'Error del servidor', error: error.message });
   }
+
+  
+};
+
+
+export const actualizarPerfil = async (req, res) => {
+  try {
+    const usuarioId = req.user.id;
+    const { nombre, telefono, direccion, email } = req.body;
+
+    // Validar que el usuario existe
+    const [usuarioRows] = await conmysql.execute(
+      'SELECT id FROM usuarios WHERE id = ?',
+      [usuarioId]
+    );
+
+    if (usuarioRows.length === 0) {
+      return res.status(404).json({ message: 'Usuario no encontrado' });
+    }
+
+    // Actualizar datos del usuario
+    const [result] = await conmysql.execute(
+      'UPDATE usuarios SET nombre = ?, telefono = ?, direccion = ?, email = ? WHERE id = ?',
+      [nombre, telefono, direccion, email, usuarioId]
+    );
+
+    // Obtener usuario actualizado
+    const [updatedRows] = await conmysql.execute(
+      'SELECT id, email, rol, nombre, telefono, direccion, fecha_creacion FROM usuarios WHERE id = ?',
+      [usuarioId]
+    );
+
+    res.json({ 
+      message: 'Perfil actualizado exitosamente',
+      usuario: updatedRows[0]
+    });
+  } catch (error) {
+    if (error.code === 'ER_DUP_ENTRY') {
+      return res.status(400).json({ message: 'El email ya está en uso' });
+    }
+    res.status(500).json({ message: 'Error del servidor', error: error.message });
+  }
 };
