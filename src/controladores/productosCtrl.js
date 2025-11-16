@@ -3,19 +3,20 @@ import { v2 as cloudinary } from 'cloudinary';
 import multer from 'multer';
 
 // =======================================
-// 🔧 CONFIGURACIÓN DE CLOUDINARY
+// 🔧 CONFIGURACIÓN DE CLOUDINARY (Igual que animales)
 // =======================================
 cloudinary.config({
-  cloud_name: 'dqxjdfncz',          // Reemplaza con tu Cloud Name
-  api_key: '972776657996249',       // Reemplaza con tu API Key
-  api_secret: '5F2PB9yT5_xycNG_vKyegoOoMc8'  // Reemplaza con tu API Secret
+    cloud_name: 'dqxjdfncz',
+    api_key: '972776657996249',
+    api_secret: '5F2PB9yT5_xycNG_vKyegoOoMc8'
 });
 
 // =======================================
-// ⚙️ CONFIGURACIÓN DE MULTER (para imágenes)
+// ⚙️ CONFIGURACIÓN DE MULTER (Igual que animales)
 // =======================================
 const storage = multer.memoryStorage();
-export const upload = multer({ storage }).single('imagen'); // campo 'imagen' en el formulario
+const upload = multer({ storage: storage }).array('imagenes[]'); // Mismo nombre que animales
+export { upload };
 
 // =======================================
 // 📦 OBTENER TODOS LOS PRODUCTOS DISPONIBLES
@@ -23,14 +24,13 @@ export const upload = multer({ storage }).single('imagen'); // campo 'imagen' en
 export const obtenerProductos = async (req, res) => {
   try {
     const [rows] = await conmysql.execute(
-      'SELECT * FROM productos ORDER BY nombre'
+      'SELECT * FROM productos WHERE disponible = TRUE ORDER BY nombre'
     );
     res.json(rows);
   } catch (error) {
     res.status(500).json({ message: 'Error del servidor', error: error.message });
   }
 };
-
 
 // =======================================
 // 📦 OBTENER PRODUCTO POR ID
@@ -39,7 +39,7 @@ export const obtenerProducto = async (req, res) => {
   try {
     const { id } = req.params;
     const [rows] = await conmysql.execute(
-      'SELECT * FROM productos WHERE id = ?', 
+      'SELECT * FROM productos WHERE id = ? AND disponible = TRUE', 
       [id]
     );
 
@@ -53,26 +53,8 @@ export const obtenerProducto = async (req, res) => {
   }
 };
 
-export const subirImagen = async (req, res) => {
-  try {
-    const archivo = req.file; // Necesitas multer para manejar archivos
-    
-    const resultado = await cloudinary.uploader.upload(archivo.path, {
-      folder: 'productos'
-    });
-
-    res.json({
-      url: resultado.secure_url,
-      public_id: resultado.public_id
-    });
-  } catch (error) {
-    res.status(500).json({ message: 'Error subiendo imagen' });
-  }
-};
-
-
 // =======================================
-// 🧑‍💼 CREAR PRODUCTO
+// 🧑‍💼 CREAR PRODUCTO (Actualizado como animales)
 // =======================================
 export const crearProducto = async (req, res) => {
   try {
@@ -80,35 +62,43 @@ export const crearProducto = async (req, res) => {
       return res.status(403).json({ message: 'No autorizado' });
     }
 
-    const { nombre, descripcion, precio, stock, unidad, categoria } = req.body;
+    const { nombre, descripcion, precio, stock, unidad, categoria, disponible } = req.body;
 
     if (!nombre || !precio || !stock || !unidad) {
-      return res.status(400).json({
-        message: 'Faltan campos requeridos'
-      });
+      return res.status(400).json({ message: 'Faltan campos requeridos' });
     }
 
     let imagenUrl = null;
 
-    // Si viene una imagen → subir a Cloudinary
-    if (req.file) {
+    // 1. Subir imágenes a Cloudinary si existen (igual que animales)
+    if (req.files && req.files.length > 0) {
+      console.log('Archivos recibidos para producto:', req.files);
+      
+      // Tomar solo la primera imagen como principal (puedes modificar para múltiples)
+      const imagen = req.files[0];
+      
       const uploadResult = await new Promise((resolve, reject) => {
-        const stream = cloudinary.uploader.upload_stream(
+        const uploadStream = cloudinary.uploader.upload_stream(
           {
-            folder: 'productos_imagenes',
-            resource_type: 'auto'
+            folder: 'productos_tienda', // Cambié el folder
+            resource_type: 'auto',
           },
           (error, result) => {
-            if (error) reject(error);
-            else resolve(result);
+            if (error) {
+              console.error("Error al subir imagen:", error);
+              return reject(error);
+            }
+            console.log('Imagen de producto subida exitosamente:', result.secure_url);
+            resolve(result);
           }
         );
-        stream.end(req.file.buffer);
+        uploadStream.end(imagen.buffer);
       });
 
       imagenUrl = uploadResult.secure_url;
     }
 
+    // 2. Insertar producto en la base de datos
     const [result] = await conmysql.execute(
       `INSERT INTO productos 
       (nombre, descripcion, precio, stock, unidad, categoria, disponible, imagen_url) 
@@ -116,29 +106,29 @@ export const crearProducto = async (req, res) => {
       [
         nombre,
         descripcion || null,
-        precio,
-        stock,
+        parseFloat(precio),
+        parseInt(stock),
         unidad,
         categoria || null,
-        1,
+        disponible !== undefined ? disponible : true,
         imagenUrl
       ]
     );
 
-    res.status(201).json({
-      message: 'Producto creado correctamente',
+    res.status(201).json({ 
+      message: 'Producto creado exitosamente', 
       id: result.insertId,
-      imagen: imagenUrl
+      imagen_url: imagenUrl 
     });
 
   } catch (error) {
-    res.status(500).json({ message: 'Error servidor', error: error.message });
+    console.error('Error en crearProducto:', error);
+    res.status(500).json({ message: 'Error al crear producto', error: error.message });
   }
 };
 
-
 // =======================================
-// ✏️ ACTUALIZAR PRODUCTO (PUT)
+// ✏️ ACTUALIZAR PRODUCTO (Actualizado como animales)
 // =======================================
 export const actualizarProducto = async (req, res) => {
   try {
@@ -147,34 +137,64 @@ export const actualizarProducto = async (req, res) => {
     }
 
     const { id } = req.params;
-    let imagenUrl = null;
+    const { nombre, descripcion, precio, stock, unidad, categoria, disponible } = req.body;
 
-    if (req.file) {
+    // Verificar si el producto existe
+    const [productoExistente] = await conmysql.execute(
+      'SELECT imagen_url FROM productos WHERE id = ?',
+      [id]
+    );
+
+    if (productoExistente.length === 0) {
+      return res.status(404).json({ message: 'Producto no encontrado' });
+    }
+
+    let imagenUrl = productoExistente[0].imagen_url;
+
+    // Si se sube nueva imagen, reemplazar la anterior
+    if (req.files && req.files.length > 0) {
+      console.log('Actualizando imagen del producto:', req.files);
+      
+      const imagen = req.files[0];
+      
       const uploadResult = await new Promise((resolve, reject) => {
-        const stream = cloudinary.uploader.upload_stream(
-          { folder: 'productos_imagenes', resource_type: 'auto' },
-          (error, result) => error ? reject(error) : resolve(result)
+        const uploadStream = cloudinary.uploader.upload_stream(
+          {
+            folder: 'productos_tienda',
+            resource_type: 'auto',
+          },
+          (error, result) => {
+            if (error) {
+              console.error("Error al subir nueva imagen:", error);
+              return reject(error);
+            }
+            console.log('Nueva imagen de producto subida:', result.secure_url);
+            resolve(result);
+          }
         );
-        stream.end(req.file.buffer);
+        uploadStream.end(imagen.buffer);
       });
 
       imagenUrl = uploadResult.secure_url;
+
+      // Opcional: Eliminar la imagen anterior de Cloudinary si existe
+      // (esto requiere guardar el public_id en la base de datos)
     }
 
-    const { nombre, descripcion, precio, stock, unidad, categoria, disponible } = req.body;
-
+    // Actualizar producto en la base de datos
     const [result] = await conmysql.execute(
       `UPDATE productos 
-      SET nombre=?, descripcion=?, precio=?, stock=?, unidad=?, categoria=?, disponible=?, imagen_url=? 
-      WHERE id=?`,
+      SET nombre = ?, descripcion = ?, precio = ?, stock = ?, unidad = ?, 
+          categoria = ?, disponible = ?, imagen_url = ?, fecha_actualizacion = CURRENT_TIMESTAMP 
+      WHERE id = ?`,
       [
         nombre,
         descripcion || null,
-        precio,
-        stock,
+        parseFloat(precio),
+        parseInt(stock),
         unidad,
         categoria || null,
-        disponible ?? 1,
+        disponible !== undefined ? disponible : true,
         imagenUrl,
         id
       ]
@@ -184,62 +204,45 @@ export const actualizarProducto = async (req, res) => {
       return res.status(404).json({ message: 'Producto no encontrado' });
     }
 
-    res.json({ message: 'Producto actualizado correctamente' });
+    res.json({ 
+      message: 'Producto actualizado exitosamente',
+      imagen_url: imagenUrl 
+    });
 
   } catch (error) {
-    res.status(500).json({ message: 'Error servidor', error: error.message });
+    console.error('Error en actualizarProducto:', error);
+    res.status(500).json({ message: 'Error al actualizar producto', error: error.message });
   }
 };
 
-
 // =======================================
-// 🔧 PATCH (actualizar parcialmente)
+// 🔧 ACTUALIZAR STOCK (Nuevo método útil)
 // =======================================
-export const patchProducto = async (req, res) => {
+export const actualizarStock = async (req, res) => {
   try {
     if (req.user.rol !== 'administrador') {
       return res.status(403).json({ message: 'No autorizado' });
     }
 
     const { id } = req.params;
-
-    if (req.file) {
-      const uploadResult = await new Promise((resolve, reject) => {
-        const stream = cloudinary.uploader.upload_stream(
-          { folder: 'productos_imagenes', resource_type: 'auto' },
-          (error, result) => error ? reject(error) : resolve(result)
-        );
-        stream.end(req.file.buffer);
-      });
-
-      req.body.imagen_url = uploadResult.secure_url;
-    }
-
-    const keys = Object.keys(req.body);
-    const values = Object.values(req.body);
-
-    if (keys.length === 0) {
-      return res.status(400).json({ message: 'No hay campos para actualizar' });
-    }
-
-    const setQuery = keys.map(k => `${k}=?`).join(', ');
+    const { stock } = req.body;
 
     const [result] = await conmysql.execute(
-      `UPDATE productos SET ${setQuery} WHERE id = ?`,
-      [...values, id]
+      'UPDATE productos SET stock = ?, fecha_actualizacion = CURRENT_TIMESTAMP WHERE id = ?',
+      [parseInt(stock), id]
     );
 
     if (result.affectedRows === 0) {
       return res.status(404).json({ message: 'Producto no encontrado' });
     }
 
-    res.json({ message: 'Actualización parcial exitosa' });
+    res.json({ message: 'Stock actualizado exitosamente' });
 
   } catch (error) {
-    res.status(500).json({ message: 'Error servidor', error: error.message });
+    console.error('Error en actualizarStock:', error);
+    res.status(500).json({ message: 'Error al actualizar stock', error: error.message });
   }
 };
-
 
 // =======================================
 // ❌ ELIMINAR PRODUCTO
@@ -252,6 +255,23 @@ export const eliminarProducto = async (req, res) => {
 
     const { id } = req.params;
 
+    // Primero obtener información de la imagen para eliminarla de Cloudinary
+    const [producto] = await conmysql.execute(
+      'SELECT imagen_url FROM productos WHERE id = ?',
+      [id]
+    );
+
+    if (producto.length === 0) {
+      return res.status(404).json({ message: 'Producto no encontrado' });
+    }
+
+    // Opcional: Eliminar imagen de Cloudinary si existe
+    // if (producto[0].imagen_url) {
+    //   // Extraer public_id de la URL y eliminar de Cloudinary
+    //   // Esto requiere guardar el public_id en la base de datos
+    // }
+
+    // Eliminar producto de la base de datos
     const [result] = await conmysql.execute(
       'DELETE FROM productos WHERE id = ?', 
       [id]
@@ -261,9 +281,82 @@ export const eliminarProducto = async (req, res) => {
       return res.status(404).json({ message: 'Producto no encontrado' });
     }
 
-    res.json({ message: 'Producto eliminado correctamente' });
+    res.json({ message: 'Producto eliminado exitosamente' });
 
   } catch (error) {
-    res.status(500).json({ message: 'Error servidor', error: error.message });
+    console.error('Error en eliminarProducto:', error);
+    res.status(500).json({ message: 'Error al eliminar producto', error: error.message });
+  }
+};
+
+// =======================================
+// 🖼️ SUBIR IMAGENES ADICIONALES (Opcional - como animales)
+// =======================================
+export const agregarImagenesProducto = async (req, res) => {
+  try {
+    if (req.user.rol !== 'administrador') {
+      return res.status(403).json({ message: 'No autorizado' });
+    }
+
+    const { id } = req.params;
+
+    // Verificar si el producto existe
+    const [producto] = await conmysql.execute(
+      'SELECT id FROM productos WHERE id = ?',
+      [id]
+    );
+
+    if (producto.length === 0) {
+      return res.status(404).json({ message: 'Producto no encontrado' });
+    }
+
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ message: 'No se han subido imágenes' });
+    }
+
+    const imagenesSubidas = [];
+
+    // Subir cada imagen a Cloudinary
+    for (const imagen of req.files) {
+      const uploadResult = await new Promise((resolve, reject) => {
+        const uploadStream = cloudinary.uploader.upload_stream(
+          {
+            folder: 'productos_tienda',
+            resource_type: 'auto',
+          },
+          (error, result) => {
+            if (error) {
+              console.error("Error al subir imagen:", error);
+              return reject(error);
+            }
+            resolve(result);
+          }
+        );
+        uploadStream.end(imagen.buffer);
+      });
+
+      console.log('Imagen adicional subida:', uploadResult.secure_url);
+      imagenesSubidas.push(uploadResult.secure_url);
+
+      // Si quieres guardar múltiples imágenes, necesitarías una tabla adicional
+      // similar a imagenes_animales
+    }
+
+    // Por ahora actualizamos la imagen principal con la primera subida
+    if (imagenesSubidas.length > 0) {
+      await conmysql.execute(
+        'UPDATE productos SET imagen_url = ? WHERE id = ?',
+        [imagenesSubidas[0], id]
+      );
+    }
+
+    res.json({ 
+      message: 'Imágenes agregadas exitosamente', 
+      imagenes: imagenesSubidas 
+    });
+
+  } catch (error) {
+    console.error('Error en agregarImagenesProducto:', error);
+    res.status(500).json({ message: 'Error al agregar imágenes', error: error.message });
   }
 };
