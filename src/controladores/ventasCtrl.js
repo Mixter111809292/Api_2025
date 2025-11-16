@@ -22,38 +22,50 @@ export const obtenerReportesVentas = async (req, res) => {
 
     const [ventas] = await conmysql.execute(query, params);
 
-    // Estadísticas
-    const [estadisticas] = await conmysql.execute(
+    // Estadísticas (FORZAR números)
+    const [estadisticasRaw] = await conmysql.execute(
       `SELECT 
-        COUNT(*) as total_ventas,
-        SUM(total_venta) as ingresos_totales,
-        AVG(total_venta) as promedio_venta
-       FROM ventas
-       ${fecha ? 'WHERE DATE(fecha_venta) = ?' : ''}`,
+        COUNT(*) AS total_ventas,
+        SUM(total_venta)+0 AS ingresos_totales,
+        AVG(total_venta)+0 AS promedio_venta
+      FROM ventas
+      ${fecha ? 'WHERE DATE(fecha_venta) = ?' : ''}`,
       fecha ? [fecha] : []
     );
 
-    // Productos más vendidos - Consulta corregida
-    const [productosVendidos] = await conmysql.execute(
+    const estadisticas = {
+      total_ventas: Number(estadisticasRaw[0].total_ventas || 0),
+      ingresos_totales: Number(estadisticasRaw[0].ingresos_totales || 0),
+      promedio_venta: Number(estadisticasRaw[0].promedio_venta || 0),
+    };
+
+    // Productos más vendidos - valores convertidos a número
+    const [productosVendidosRaw] = await conmysql.execute(
       `SELECT 
         p.nombre,
-        SUM(ip.cantidad) as total_vendido,
-        SUM(ip.subtotal) as ingresos_producto
-       FROM items_pedido ip
-       JOIN productos p ON ip.producto_id = p.id
-       JOIN pedidos pd ON ip.pedido_id = pd.id
-       JOIN ventas v ON pd.id = v.pedido_id
-       ${fecha ? 'WHERE DATE(v.fecha_venta) = ?' : ''}
-       GROUP BY p.id, p.nombre
-       ORDER BY total_vendido DESC
-       LIMIT 10`,
+        SUM(ip.cantidad) AS total_vendido,
+        SUM(ip.subtotal)+0 AS ingresos_producto
+      FROM items_pedido ip
+      JOIN productos p ON ip.producto_id = p.id
+      JOIN pedidos pd ON ip.pedido_id = pd.id
+      JOIN ventas v ON pd.id = v.pedido_id
+      ${fecha ? 'WHERE DATE(v.fecha_venta) = ?' : ''}
+      GROUP BY p.id, p.nombre
+      ORDER BY total_vendido DESC
+      LIMIT 10`,
       fecha ? [fecha] : []
     );
+
+    const productos_mas_vendidos = productosVendidosRaw.map(p => ({
+      nombre: p.nombre,
+      total_vendido: Number(p.total_vendido || 0),
+      ingresos_producto: Number(p.ingresos_producto || 0)
+    }));
 
     res.json({
       ventas,
-      estadisticas: estadisticas[0],
-      productos_mas_vendidos: productosVendidos
+      estadisticas,
+      productos_mas_vendidos
     });
 
   } catch (error) {
