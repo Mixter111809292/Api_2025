@@ -53,6 +53,23 @@ export const obtenerProducto = async (req, res) => {
   }
 };
 
+export const subirImagen = async (req, res) => {
+  try {
+    const archivo = req.file; // Necesitas multer para manejar archivos
+    
+    const resultado = await cloudinary.uploader.upload(archivo.path, {
+      folder: 'productos'
+    });
+
+    res.json({
+      url: resultado.secure_url,
+      public_id: resultado.public_id
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Error subiendo imagen' });
+  }
+};
+
 
 // =======================================
 // 🧑‍💼 CREAR PRODUCTO
